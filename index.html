@@ -68,7 +68,9 @@
 
     <p>
       <strong>Caller:</strong><br>
-      <span id="caller" class="number">Waiting for a call...</span>
+      <span id="caller" class="number">
+        Waiting for a call...
+      </span>
     </p>
 
     <p>
@@ -94,35 +96,61 @@
 
   <h3>Raw Webex Event</h3>
 
-  <pre id="raw">No call events received yet.</pre>
+  <pre id="raw">
+No call events received yet.
+  </pre>
 
   <h3>Event Log</h3>
 
-  <pre id="log">Waiting for events...</pre>
+  <pre id="log">
+Waiting for events...
+  </pre>
 
   <div class="version">
-    Braidwater Call Listener — TEST VERSION 2
+    Braidwater Call Listener — TEST VERSION 3
   </div>
 
   <script>
     window.addEventListener("load", async () => {
 
-      const statusEl = document.getElementById("status");
-      const callerEl = document.getElementById("caller");
-      const typeEl = document.getElementById("type");
-      const stateEl = document.getElementById("state");
-      const callIdEl = document.getElementById("call-id");
-      const disconnectEl = document.getElementById("disconnect");
-      const rawEl = document.getElementById("raw");
-      const logEl = document.getElementById("log");
+      const API_URL =
+        "https://api.braidwater.com/api/v1/telephony/webex/events";
+
+      const statusEl =
+        document.getElementById("status");
+
+      const callerEl =
+        document.getElementById("caller");
+
+      const typeEl =
+        document.getElementById("type");
+
+      const stateEl =
+        document.getElementById("state");
+
+      const callIdEl =
+        document.getElementById("call-id");
+
+      const disconnectEl =
+        document.getElementById("disconnect");
+
+      const rawEl =
+        document.getElementById("raw");
+
+      const logEl =
+        document.getElementById("log");
 
       let eventCount = 0;
 
+
       function addLog(message) {
-        const time = new Date().toLocaleTimeString();
+
+        const time =
+          new Date().toLocaleTimeString();
 
         const existing =
-          logEl.textContent === "Waiting for events..."
+          logEl.textContent.trim() ===
+          "Waiting for events..."
             ? ""
             : logEl.textContent;
 
@@ -130,81 +158,224 @@
           `[${time}] ${message}\n${existing}`;
       }
 
+
+      async function sendToTeam(call) {
+
+        const phoneNumber =
+          call?.remoteParticipants?.[0]?.callerID ||
+          null;
+
+        const payload = {
+
+          call_id:
+            call?.id || null,
+
+          direction:
+            call?.callType === "Received"
+              ? "received"
+              : "placed",
+
+          state:
+            call?.state
+              ? call.state.toLowerCase()
+              : null,
+
+          phone_number:
+            phoneNumber,
+
+          disconnect_reason:
+            call?.disconnectReason || null
+        };
+
+
+        addLog(
+          `Sending to TEAM: ` +
+          `${payload.state} / ` +
+          `${payload.phone_number || "unknown"}`
+        );
+
+
+        const response = await fetch(
+          API_URL,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json"
+            },
+
+            body:
+              JSON.stringify(payload)
+          }
+        );
+
+
+        if (!response.ok) {
+
+          throw new Error(
+            `TEAM API returned HTTP ${response.status}`
+          );
+        }
+
+
+        const result =
+          await response.json();
+
+
+        console.log(
+          "TEAM API response:",
+          result
+        );
+
+
+        addLog(
+          `TEAM POST SUCCESS: ` +
+          `${payload.state} / ` +
+          `${payload.phone_number || "unknown"}`
+        );
+
+
+        return result;
+      }
+
+
       try {
 
-        statusEl.textContent = "Connecting to Webex...";
+        statusEl.textContent =
+          "Connecting to Webex...";
 
-        const app = new window.webex.Application({
-          logs: {
-            logLevel: 0
-          }
-        });
+
+        const app =
+          new window.webex.Application({
+            logs: {
+              logLevel: 0
+            }
+          });
+
 
         await app.onReady();
 
-        statusEl.textContent = "Connected to Webex";
-        addLog("Webex Embedded App SDK ready");
+
+        statusEl.textContent =
+          "Connected to Webex";
+
+        addLog(
+          "Webex Embedded App SDK ready"
+        );
+
 
         await app.listen();
 
-        statusEl.textContent = "Listening for incoming calls";
-        addLog("Listening for Webex events");
 
-        app.on("sidebar:callStateChanged", (call) => {
+        statusEl.textContent =
+          "Listening for incoming calls";
 
-          try {
+        addLog(
+          "Listening for Webex events"
+        );
 
-            eventCount++;
 
-            console.log(
-              "Webex call event:",
-              call
-            );
+        app.on(
+          "sidebar:callStateChanged",
+          async (call) => {
 
-            const callerNumber =
-              call?.remoteParticipants?.[0]?.callerID ||
-              call?.remoteParticipants?.[0]?.name ||
-              "No caller ID supplied";
+            try {
 
-            callerEl.textContent =
-              callerNumber;
+              eventCount++;
 
-            typeEl.textContent =
-              call?.callType || "-";
 
-            stateEl.textContent =
-              call?.state || "-";
+              console.log(
+                "Webex call event:",
+                call
+              );
 
-            callIdEl.textContent =
-              call?.id || "-";
 
-            disconnectEl.textContent =
-              call?.disconnectReason || "-";
+              const callerNumber =
+                call?.remoteParticipants?.[0]?.callerID ||
+                call?.remoteParticipants?.[0]?.name ||
+                "No caller ID supplied";
 
-            rawEl.textContent =
-              JSON.stringify(call, null, 2);
 
-            addLog(
-              `Event ${eventCount}: ` +
-              `${call?.callType || "unknown"} / ` +
-              `${call?.state || "unknown"} / ` +
-              `${callerNumber}`
-            );
+              callerEl.textContent =
+                callerNumber;
 
-          } catch (eventError) {
 
-            console.error(
-              "Error processing call event:",
-              eventError
-            );
+              typeEl.textContent =
+                call?.callType || "-";
 
-            addLog(
-              "ERROR processing call event: " +
-              (eventError.message || eventError)
-            );
+
+              stateEl.textContent =
+                call?.state || "-";
+
+
+              callIdEl.textContent =
+                call?.id || "-";
+
+
+              disconnectEl.textContent =
+                call?.disconnectReason || "-";
+
+
+              rawEl.textContent =
+                JSON.stringify(
+                  call,
+                  null,
+                  2
+                );
+
+
+              addLog(
+                `Webex event ${eventCount}: ` +
+                `${call?.callType || "unknown"} / ` +
+                `${call?.state || "unknown"} / ` +
+                `${callerNumber}`
+              );
+
+
+              /*
+               * Only send events to TEAM if
+               * Webex supplied a call ID.
+               */
+
+              if (call?.id) {
+
+                try {
+
+                  await sendToTeam(call);
+
+                } catch (apiError) {
+
+                  console.error(
+                    "TEAM POST FAILED:",
+                    apiError
+                  );
+
+
+                  addLog(
+                    `TEAM POST FAILED: ` +
+                    `${apiError.message || apiError}`
+                  );
+                }
+              }
+
+
+            } catch (eventError) {
+
+              console.error(
+                "Error processing Webex event:",
+                eventError
+              );
+
+
+              addLog(
+                `ERROR processing Webex event: ` +
+                `${eventError.message || eventError}`
+              );
+            }
+
           }
+        );
 
-        });
 
       } catch (error) {
 
@@ -213,13 +384,15 @@
           error
         );
 
+
         statusEl.textContent =
           "Webex connection failed: " +
           (error.message || error);
 
+
         addLog(
-          "INITIALIZATION ERROR: " +
-          (error.message || error)
+          `INITIALIZATION ERROR: ` +
+          `${error.message || error}`
         );
       }
 
