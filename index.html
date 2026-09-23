@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Braidwater Webex Call Listener</title>
+
+  <script
+    src="https://unpkg.com/@webex/embedded-app-sdk@latest"
+    defer>
+  </script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    .status {
+      padding: 12px;
+      border: 1px solid #ccc;
+      margin-bottom: 20px;
+    }
+
+    .call {
+      padding: 15px;
+      border: 2px solid #333;
+      margin-bottom: 20px;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: #f5f5f5;
+      padding: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h2>Braidwater Webex Call Listener</h2>
+
+  <div class="status">
+    <strong>Status:</strong>
+    <span id="status">Starting...</span>
+  </div>
+
+  <div class="call">
+    <h3>Latest Call</h3>
+
+    <p>
+      <strong>Caller:</strong>
+      <span id="caller">Waiting for a call...</span>
+    </p>
+
+    <p>
+      <strong>Call type:</strong>
+      <span id="type">-</span>
+    </p>
+
+    <p>
+      <strong>Call state:</strong>
+      <span id="state">-</span>
+    </p>
+  </div>
+
+  <h3>Raw Webex Event</h3>
+
+  <pre id="raw">No call events received yet.</pre>
+
+  <script>
+    window.addEventListener("load", async () => {
+      const status = document.getElementById("status");
+
+      try {
+        const app = new window.webex.Application({
+          logs: {
+            logLevel: 0
+          }
+        });
+
+        await app.onReady();
+
+        status.textContent = "Connected to Webex";
+
+        await app.listen();
+
+        status.textContent = "Listening for incoming calls";
+
+        app.on("sidebar:callStateChanged", (call) => {
+
+          console.log("Webex call event:", call);
+
+          document.getElementById("caller").textContent =
+            call.id || "No caller ID supplied";
+
+          document.getElementById("type").textContent =
+            call.callType || "-";
+
+          document.getElementById("state").textContent =
+            call.state || "-";
+
+          document.getElementById("raw").textContent =
+            JSON.stringify(call, null, 2);
+        });
+
+      } catch (error) {
+
+        console.error(error);
+
+        status.textContent =
+          "Webex connection failed: " +
+          (error.message || error);
+      }
+    });
+  </script>
+
+</body>
+</html>
