@@ -337,11 +337,12 @@ Waiting for events...
                * Webex supplied a call ID.
                */
 
-              if (call?.id) {
-
-                try {
-
-                  await sendToTeam(call);
+             if (
+  call?.id &&
+  call?.remoteParticipants?.[0]?.callerID
+) {
+  try {
+    await sendToTeam(call);
 
                 } catch (apiError) {
 
