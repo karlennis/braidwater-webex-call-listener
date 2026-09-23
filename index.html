@@ -96,26 +96,45 @@
 
   <h3>Raw Webex Event</h3>
 
-  <pre id="raw">
-No call events received yet.
-  </pre>
+  <pre id="raw">No call events received yet.</pre>
 
   <h3>Event Log</h3>
 
-  <pre id="log">
-Waiting for events...
-  </pre>
+  <pre id="log">Waiting for events...</pre>
 
   <div class="version">
-    Braidwater Call Listener — TEST VERSION 3
+    Braidwater Call Listener — TEST VERSION 4
   </div>
+
 
   <script>
     window.addEventListener("load", async () => {
 
+      /*
+       * Braidwater TEAM API
+       */
       const API_URL =
         "https://api.braidwater.com/api/v1/telephony/webex/events";
 
+
+      /*
+       * These are the only Webex call states
+       * that TEAM currently needs.
+       *
+       * Started   = phone is ringing
+       * Connected = call has been answered
+       * Ended     = call has finished
+       */
+      const ALLOWED_STATES = [
+        "Started",
+        "Connected",
+        "Ended"
+      ];
+
+
+      /*
+       * Page elements
+       */
       const statusEl =
         document.getElementById("status");
 
@@ -140,9 +159,13 @@ Waiting for events...
       const logEl =
         document.getElementById("log");
 
+
       let eventCount = 0;
 
 
+      /*
+       * Add an entry to the visible event log.
+       */
       function addLog(message) {
 
         const time =
@@ -159,11 +182,15 @@ Waiting for events...
       }
 
 
+      /*
+       * Send a Webex call event to TEAM.
+       */
       async function sendToTeam(call) {
 
         const phoneNumber =
           call?.remoteParticipants?.[0]?.callerID ||
           null;
+
 
         const payload = {
 
@@ -191,7 +218,7 @@ Waiting for events...
         addLog(
           `Sending to TEAM: ` +
           `${payload.state} / ` +
-          `${payload.phone_number || "unknown"}`
+          `${payload.phone_number}`
         );
 
 
@@ -231,7 +258,7 @@ Waiting for events...
         addLog(
           `TEAM POST SUCCESS: ` +
           `${payload.state} / ` +
-          `${payload.phone_number || "unknown"}`
+          `${payload.phone_number}`
         );
 
 
@@ -239,6 +266,9 @@ Waiting for events...
       }
 
 
+      /*
+       * Start Webex Embedded App SDK.
+       */
       try {
 
         statusEl.textContent =
@@ -275,6 +305,9 @@ Waiting for events...
         );
 
 
+        /*
+         * Listen for Webex call state changes.
+         */
         app.on(
           "sidebar:callStateChanged",
           async (call) => {
@@ -290,14 +323,23 @@ Waiting for events...
               );
 
 
+              /*
+               * Extract caller number.
+               */
               const callerNumber =
                 call?.remoteParticipants?.[0]?.callerID ||
                 call?.remoteParticipants?.[0]?.name ||
-                "No caller ID supplied";
+                null;
 
 
+              /*
+               * Update the screen for EVERY Webex
+               * event, even if we don't send the
+               * event to TEAM.
+               */
               callerEl.textContent =
-                callerNumber;
+                callerNumber ||
+                "No caller ID supplied";
 
 
               typeEl.textContent =
@@ -328,21 +370,33 @@ Waiting for events...
                 `Webex event ${eventCount}: ` +
                 `${call?.callType || "unknown"} / ` +
                 `${call?.state || "unknown"} / ` +
-                `${callerNumber}`
+                `${callerNumber || "No caller ID supplied"}`
               );
 
 
               /*
-               * Only send events to TEAM if
-               * Webex supplied a call ID.
+               * Don't send anything to TEAM unless
+               * Webex has supplied:
+               *
+               * 1. A call ID
+               * 2. A caller telephone number
+               * 3. A state TEAM cares about
                */
+              const shouldSendToTeam =
+                Boolean(call?.id) &&
+                Boolean(
+                  call?.remoteParticipants?.[0]?.callerID
+                ) &&
+                ALLOWED_STATES.includes(
+                  call?.state
+                );
 
-             if (
-  call?.id &&
-  call?.remoteParticipants?.[0]?.callerID
-) {
-  try {
-    await sendToTeam(call);
+
+              if (shouldSendToTeam) {
+
+                try {
+
+                  await sendToTeam(call);
 
                 } catch (apiError) {
 
@@ -355,6 +409,28 @@ Waiting for events...
                   addLog(
                     `TEAM POST FAILED: ` +
                     `${apiError.message || apiError}`
+                  );
+                }
+
+              } else {
+
+                /*
+                 * Useful during development so we
+                 * can see why an event wasn't sent.
+                 */
+                if (!call?.remoteParticipants?.[0]?.callerID) {
+
+                  addLog(
+                    "Not sent to TEAM: caller number not available yet"
+                  );
+
+                } else if (
+                  !ALLOWED_STATES.includes(call?.state)
+                ) {
+
+                  addLog(
+                    `Not sent to TEAM: ` +
+                    `${call?.state || "unknown"} state ignored`
                   );
                 }
               }
