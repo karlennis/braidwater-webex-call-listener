@@ -97,7 +97,7 @@
           console.log("Webex call event:", call);
 
           document.getElementById("caller").textContent =
-          call.remoteParticipants[0].callerID || "No caller ID supplied";
+  call.remoteParticipants?.[0]?.callerID || "No caller ID supplied";
 
           document.getElementById("type").textContent =
             call.callType || "-";
