@@ -39,6 +39,36 @@
       font-weight: bold;
     }
 
+    .matches {
+      padding: 15px;
+      border: 2px solid #333;
+      margin-bottom: 20px;
+    }
+
+    .match {
+      padding: 12px 0;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .match:last-child {
+      border-bottom: none;
+    }
+
+    .match-name {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .match-type {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #666;
+    }
+
+    .no-match {
+      font-weight: bold;
+    }
+
     pre {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
@@ -62,6 +92,7 @@
     <strong>Status:</strong>
     <span id="status">Starting...</span>
   </div>
+
 
   <div class="call">
     <h3>Latest Call</h3>
@@ -94,36 +125,40 @@
     </p>
   </div>
 
+
+  <div class="matches">
+    <h3>TEAM Matches</h3>
+
+    <div id="matches">
+      Waiting for incoming call...
+    </div>
+  </div>
+
+
   <h3>Raw Webex Event</h3>
 
   <pre id="raw">No call events received yet.</pre>
+
 
   <h3>Event Log</h3>
 
   <pre id="log">Waiting for events...</pre>
 
+
   <div class="version">
-    Braidwater Call Listener — TEST VERSION 4
+    Braidwater Call Listener — TEST VERSION 5
   </div>
 
 
   <script>
     window.addEventListener("load", async () => {
 
-      /*
-       * Braidwater TEAM API
-       */
       const API_URL =
         "https://api.braidwater.com/api/v1/telephony/webex/events";
 
 
       /*
-       * These are the only Webex call states
-       * that TEAM currently needs.
-       *
-       * Started   = phone is ringing
-       * Connected = call has been answered
-       * Ended     = call has finished
+       * Only these Webex states are sent to TEAM.
        */
       const ALLOWED_STATES = [
         "Started",
@@ -153,6 +188,9 @@
       const disconnectEl =
         document.getElementById("disconnect");
 
+      const matchesEl =
+        document.getElementById("matches");
+
       const rawEl =
         document.getElementById("raw");
 
@@ -164,7 +202,7 @@
 
 
       /*
-       * Add an entry to the visible event log.
+       * Visible development log.
        */
       function addLog(message) {
 
@@ -183,7 +221,209 @@
 
 
       /*
-       * Send a Webex call event to TEAM.
+       * Safely create a text element.
+       *
+       * We use textContent rather than inserting
+       * database values as raw HTML.
+       */
+      function createTextElement(
+        tag,
+        className,
+        text
+      ) {
+
+        const element =
+          document.createElement(tag);
+
+        if (className) {
+          element.className = className;
+        }
+
+        element.textContent =
+          text || "";
+
+        return element;
+      }
+
+
+      /*
+       * Display matches returned by TEAM.
+       */
+      function displayMatches(matches) {
+
+        matchesEl.replaceChildren();
+
+
+        if (!Array.isArray(matches)) {
+
+          matchesEl.appendChild(
+            createTextElement(
+              "div",
+              "no-match",
+              "No lookup result returned."
+            )
+          );
+
+          return;
+        }
+
+
+        if (matches.length === 0) {
+
+          matchesEl.appendChild(
+            createTextElement(
+              "div",
+              "no-match",
+              "No matching record found in TEAM."
+            )
+          );
+
+          return;
+        }
+
+
+        matchesEl.appendChild(
+          createTextElement(
+            "p",
+            "",
+            `${matches.length} matching record` +
+            `${matches.length === 1 ? "" : "s"} found`
+          )
+        );
+
+
+        matches.forEach((match) => {
+
+          const container =
+            document.createElement("div");
+
+          container.className =
+            "match";
+
+
+          /*
+           * Record type
+           */
+          container.appendChild(
+            createTextElement(
+              "div",
+              "match-type",
+              match.type || "record"
+            )
+          );
+
+
+          /*
+           * Person/contact name
+           */
+          container.appendChild(
+            createTextElement(
+              "div",
+              "match-name",
+              match.name || "Unnamed record"
+            )
+          );
+
+
+          /*
+           * Business name - contacts
+           */
+          if (match.business_name) {
+
+            container.appendChild(
+              createTextElement(
+                "div",
+                "",
+                match.business_name
+              )
+            );
+          }
+
+
+          /*
+           * Job title - staff users
+           */
+          if (match.job_title) {
+
+            container.appendChild(
+              createTextElement(
+                "div",
+                "",
+                match.job_title
+              )
+            );
+          }
+
+
+          /*
+           * Department - staff users
+           */
+          if (match.department) {
+
+            container.appendChild(
+              createTextElement(
+                "div",
+                "",
+                `Department: ${match.department}`
+              )
+            );
+          }
+
+
+          /*
+           * Telephone number
+           */
+          if (match.phone) {
+
+            container.appendChild(
+              createTextElement(
+                "div",
+                "",
+                `Phone: ${match.phone}`
+              )
+            );
+          }
+
+
+          /*
+           * Which user field matched
+           */
+          if (match.matched_field) {
+
+            container.appendChild(
+              createTextElement(
+                "div",
+                "",
+                `Matched via: ${match.matched_field}`
+              )
+            );
+          }
+
+
+          /*
+           * Project reference for contacts
+           */
+          if (match.project_id) {
+
+            container.appendChild(
+              createTextElement(
+                "div",
+                "",
+                `Project ID: ${match.project_id}`
+              )
+            );
+          }
+
+
+          matchesEl.appendChild(
+            container
+          );
+        });
+      }
+
+
+      /*
+       * Send event to Braidwater TEAM.
        */
       async function sendToTeam(call) {
 
@@ -222,19 +462,21 @@
         );
 
 
-        const response = await fetch(
-          API_URL,
-          {
-            method: "POST",
+        const response =
+          await fetch(
+            API_URL,
+            {
+              method: "POST",
 
-            headers: {
-              "Content-Type": "application/json"
-            },
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
 
-            body:
-              JSON.stringify(payload)
-          }
-        );
+              body:
+                JSON.stringify(payload)
+            }
+          );
 
 
         if (!response.ok) {
@@ -260,6 +502,36 @@
           `${payload.state} / ` +
           `${payload.phone_number}`
         );
+
+
+        /*
+         * The Rails controller currently performs
+         * the lookup on the "started" event.
+         *
+         * Only replace the displayed matches when
+         * the response actually contains matches.
+         *
+         * This prevents Connected and Ended from
+         * clearing the Started lookup result.
+         */
+        if (Array.isArray(result.matches)) {
+
+          if (
+            payload.state === "started"
+          ) {
+
+            displayMatches(
+              result.matches
+            );
+
+
+            addLog(
+              `TEAM LOOKUP: ` +
+              `${result.matches.length} match` +
+              `${result.matches.length === 1 ? "" : "es"} found`
+            );
+          }
+        }
 
 
         return result;
@@ -289,6 +561,7 @@
         statusEl.textContent =
           "Connected to Webex";
 
+
         addLog(
           "Webex Embedded App SDK ready"
         );
@@ -299,6 +572,7 @@
 
         statusEl.textContent =
           "Listening for incoming calls";
+
 
         addLog(
           "Listening for Webex events"
@@ -323,9 +597,6 @@
               );
 
 
-              /*
-               * Extract caller number.
-               */
               const callerNumber =
                 call?.remoteParticipants?.[0]?.callerID ||
                 call?.remoteParticipants?.[0]?.name ||
@@ -333,9 +604,7 @@
 
 
               /*
-               * Update the screen for EVERY Webex
-               * event, even if we don't send the
-               * event to TEAM.
+               * Update latest-call display.
                */
               callerEl.textContent =
                 callerNumber ||
@@ -375,12 +644,13 @@
 
 
               /*
-               * Don't send anything to TEAM unless
-               * Webex has supplied:
+               * Send only meaningful call events.
                *
-               * 1. A call ID
-               * 2. A caller telephone number
-               * 3. A state TEAM cares about
+               * We require:
+               *
+               * - Webex call ID
+               * - Caller telephone number
+               * - Started, Connected or Ended state
                */
               const shouldSendToTeam =
                 Boolean(call?.id) &&
@@ -415,22 +685,28 @@
               } else {
 
                 /*
-                 * Useful during development so we
-                 * can see why an event wasn't sent.
+                 * Explain ignored events in
+                 * development log.
                  */
-                if (!call?.remoteParticipants?.[0]?.callerID) {
+                if (
+                  !call?.remoteParticipants?.[0]?.callerID
+                ) {
 
                   addLog(
-                    "Not sent to TEAM: caller number not available yet"
+                    "Not sent to TEAM: " +
+                    "caller number not available yet"
                   );
 
                 } else if (
-                  !ALLOWED_STATES.includes(call?.state)
+                  !ALLOWED_STATES.includes(
+                    call?.state
+                  )
                 ) {
 
                   addLog(
                     `Not sent to TEAM: ` +
-                    `${call?.state || "unknown"} state ignored`
+                    `${call?.state || "unknown"} ` +
+                    `state ignored`
                   );
                 }
               }
